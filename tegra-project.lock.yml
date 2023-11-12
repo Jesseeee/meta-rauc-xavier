@@ -1,0 +1,14 @@
+header:
+    version: 14
+overrides:
+    repos:
+        meta-openembedded:
+            commit: 922f41b39f364e5b6be596b4b51e0fb37ffe1971
+        meta-rauc:
+            commit: c0dcec7b1b0d20862806915e12b4f332e5bef58c
+        meta-tegra:
+            commit: 024978f56f3a3c7ce9d193a2dc44faf26004cc0b
+        meta-tegra-community:
+            commit: 9c5a0c699d0ac4ef07251e200d9307f4ae62baa0
+        poky:
+            commit: a61e021c65cb11aa6221f412fb89afc5476cc5e3

@@ -1,0 +1,214 @@
+Table of Contents
+=================
+
+  I. Environment setup
+ II. Partitioning
+III. Redundant boot flow
+ IV. Updating mechanism
+  V. Read-only rootfs and overlays
+
+
+I. Environment setup
+=================================================
+
+
+* Clone the layer
+
+        git clone "https:://github.com/Jesseeee/meta-rauc-xavier.git" layers/meta-rauc-xavier
+
+* Checkout project
+
+        kas checkout layers/meta-rauc-xavier/tegra-project.yml
+
+* Build project
+
+        kas-container build layers/meta-rauc-xavier/tegra-project.yml
+
+  If docker is running behind seccomp, there could some errors due to the confinement.
+  To run docker unconfined use:
+
+        kas-container --runtime-args "--security-opt seccomp=unconfined" \
+        build layers/meta-rauc-xavier/tegra-project.yml
+
+* Work on the project
+
+        kas-container shell layers/meta-rauc-xavuer/tegra-project.yml
+
+* Build engineering image
+
+        kas-container shell layers/meta-rauc-xavier/tegra-project.yml
+        bitbake xavier-raucdemo-image
+
+II. Partitioning
+================================================
+
+         1       APP                                           40        10485799
+         2       APP_b                                   10485800        20971559
+         3       DATA                                    20971560        58720295
+         4       mts-mce                                 58720296        58720615
+         5       mts-proper                              58720616        58728807
+         6       cpu-bootloader                          58728808        58736999
+         7       bootloader-dtb                          58737000        58738023
+         8       secure-os                               58738024        58743143
+         9       eks                                     58743144        58743271
+        10       bpmp-fw                                 58743272        58746343
+        11       bpmp-fw-dtb                             58746344        58748391
+        12       xusb-fw                                 58748392        58748711
+        13       rce-fw                                  58748712        58752807
+        14       adsp-fw                                 58752808        58756903
+        15       sce-fw                                  58756904        58758951
+        16       sc7                                     58758952        58759207
+        17       kernel                                  58759208        58923047
+        18       kernel-dtb                              58923048        58924071
+        19       reserved_for_chain_A_user               58924072        58989607
+        20       mts-mce_b                               58990592        58990911
+        21       mts-proper_b                            58990912        58999103
+        22       cpu-bootloader_b                        58999104        59007295
+        23       bootloader-dtb_b                        59007296        59008319
+        24       secure-os_b                             59008320        59013439
+        25       eks_b                                   59013440        59013567
+        26       bpmp-fw_b                               59013568        59016639
+        27       bpmp-fw-dtb_b                           59016640        59018687
+        28       xusb-fw_b                               59018688        59019007
+        29       rce-fw_b                                59019008        59023103
+        30       adsp-fw_b                               59023104        59027199
+        31       sce-fw_b                                59027200        59029247
+        32       sc7_b                                   59029248        59029503
+        33       kernel_b                                59029504        59193343
+        34       kernel-dtb_b                            59193344        59194367
+        35       reserved_for_chain_B_user               59194368        59260927
+        36       recovery                                59260928        59424767
+        37       recovery-dtb                            59424768        59425791
+        38       RECROOTFS                               59425792        60040191
+        39       uefi_variables                          60040192        60040447
+        40       esp                                     60040448        60171519
+        41       recovery_alt                            60171520        60335359
+        42       recovery-dtb_alt                        60335360        60336383
+        43       esp_alt                                 60336384        60467455
+        44       UDA                                     60467456        61079518
+
+All the partitions here are default for the product except the DATA partition.
+The DATA partition was added to permit having a share folder between the A/B boot
+chains. Indeed, when the redundancy boots from a partition set, the other partition
+set is not mounted and therefore not visible from the userspace.
+
+V. Redundant boot flow
+================================================
+
+The image uses the NVIDIA Tegra UEFI redundant boot flow. The redundant boot flow
+is enabled by the UEFI variable `RootfsRedundancyLevel` which must be set on `1`.
+
+Here summarizing the redundant boot flow:
+
+* The system boots, UEFI checks the `BootChainOsCurrent` UEFI variable.
+  The system will boot from slot A if the variable is 0, B if 1.
+* The boot chain A is represented by all the partitions without the `_b` suffix.
+  On the contrary, the boot chain B is represented by all the partitions with the
+  `_b` suffix.
+* Once the bootloader knows which partition is booting, it loads kernel, dtb and
+  mounts the rootfs from the correct slot.
+* If for whatever reason the system cannot boot from that slot, the system will
+  reboot trying from the same slot for a fixed number of times
+  defined in the variable `RootfsRetryCountMax`.
+  When the counter is exceeded, the slot is marked as bad on
+  the variable `RootfsStatusSlotA` or `RootfsStatusSlotB` corresponding to the
+  offending slot.
+* The bootloader then switches to the other slot to try.
+* Slot status must be reset manually to try booting from that slot again.
+
+VI. Updating mechanism
+================================================
+
+The updating mechanism is handled by RAUC. To generate an update file:
+
+        kas-container shell layers/meta-rauc-xavier/tegra-project.yml
+        bitbake update-bundle
+
+for building an update file. The produced update file will be:
+
+* `update-bundle-jetson-agx-xavier-devkit.raucb`
+
+This file needs to be copied to the target device (via ssh for example) or put
+on a USB device. Then it can be installed with
+
+        rauc install update-bundle-jetson-agx-xavier-devkit.raucb
+
+The update is based on the following configuration:
+
+        [handlers]
+        bootloader-custom-backend = /usr/bin/nvbootctrl-rauc
+        post-install = /usr/bin/post-install
+
+        [slot.rootfs.0]
+        device = /dev/disk/by-partlabel/APP
+        type = ext4
+        bootname = APP
+
+        [slot.rootfs.1]
+        device = /dev/disk/by-partlabel/APP_b
+        type = ext4
+        bootname = APP_b
+
+        [slot.kernel.0]
+        device = /dev/disk/by-partlabel/kernel
+        type = raw
+        parent = rootfs.0
+
+        [slot.kernel.1]
+        device = /dev/disk/by-partlabel/kernel_b
+        type = raw
+        parent = rootfs.1
+
+        [slot.dtb.0]
+        device = /dev/disk/by-partlabel/kernel-dtb
+        type = raw
+        parent = rootfs.0
+
+        [slot.dtb.1]
+        device = /dev/disk/by-partlabel/kernel-dtb_b
+        type = raw
+        parent = rootfs.1
+
+Apart from the standard configuration, two things are to mention:
+
+* The update leverages the custom backend for bootloader: rauc doesn't natively
+  supports the NVIDIA UEFI redundancy implementation, therefore it is needed to
+  implement the custom bootloader handler. The handler is implemented in
+  `/usr/bin/nvbootctrl-rauc`.
+* To make the update mechanism fully integrated with the NVIDIA redundancy
+  implementation we need to mark as good both the partition the system will boot
+  into: indeed, when an updated is installed on a "bad" slot, the system must
+  mark it as good as soon the update completes to permit the bootloader to
+  choose it while loading. Else, the slot will be permanently banned from the
+  bootloader choice list.
+
+Update installation sequence is resumed here:
+
+* RAUC service starts at boot at discover the current system configuration,
+  especially the current running slot. This info is important because the update
+  will be installed on the inactive slot.
+* An update is installed with `rauc install`.
+* RAUC validates the package and installs it, image by image, on the inactive
+  slot.
+* If the installation completes without errors, RAUC will swap the inactive slot
+  with the active one.
+* On NVIDIA platforms, both slots A and B are marked as good by the post-install
+  script.
+* On NVIDIA platforms, a reboot is required to actually switch the active boot
+  slot, therefore the system is rebooted once the update installation completes.
+
+VII. Read-only rootfs and overlays
+================================================
+
+To guarantee a certain degree of resiliency to the filesystem, both rootfs A and B
+are mounted readonly. To overcome the problems of having a readonly filesystem,
+two strategies were applied:
+
+* Overlay filesystem: yocto provides a way to define which folder can be mounted
+  under an overlay filesystem: this filesystem provides a way to see a folder as
+  writable even if it's readonly by merging the content of the readonly folder with
+  a writable one. The overlayfs is implemented for all the folders which need
+  to be writable to have a working os.
+* Data partition: the overlayfs folders are mounted into the /data partition
+  which is shared between the A and B rootfs. This way, a change on the rootfs A
+  is reflected also on rootfs B when the update mechanism switches the active slot.

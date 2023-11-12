@@ -1,0 +1,77 @@
+/** @file
+*
+*  SPDX-License-Identifier: MIT
+*
+* This file setup the UEFI variables responsible for UEFI inner working.
+* Two variables are important for redundancy:
+* * RootfsRedundancyLevel: if 1, enables the redundancy support in UEFI
+* * RootfsRetryCountMax: number of times the system tries to boot before
+*   switching boot chain.
+**/
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	overlay-name = "L4T Configuration Settings A/B enabled";
+
+	fragment@0 {
+		target-path = "/";
+		board_config {
+			sw-modules = "uefi";
+		};
+
+		__overlay__ {
+			firmware {
+				uefi {
+					variables {
+						gNVIDIAPublicVariableGuid {
+							QuickBootEnabled {
+								data = [00];
+								non-volatile;
+							};
+							NewDeviceHierarchy {
+								data = [01];
+								non-volatile;
+							};
+							RootfsRetryCountMax {
+								data = [03 00 00 00];
+								runtime;
+								locked;
+							};
+							RootfsRedundancyLevel {
+								data = [01 00 00 00];
+								runtime;
+								locked;
+							};
+							AutoUpdateBrBct {
+								data = [01 00 00 00];
+								non-volatile;
+							};
+							L4TDefaultBootMode {
+								data = [01 00 00 00];
+								runtime;
+								non-volatile;
+							};
+						};
+
+						gNVIDIATokenSpaceGuid {
+							DefaultBootPriority {
+								data = "usb,nvme,emmc,sd,ufs";
+								locked;
+							};
+						};
+
+						gEfiGlobalVariableGuid {
+							Timeout {
+								data = [00 00];
+								runtime;
+								non-volatile;
+							};
+						};
+					};
+				};
+			};
+		};
+	};
+};

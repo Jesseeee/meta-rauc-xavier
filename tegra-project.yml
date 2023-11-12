@@ -1,0 +1,54 @@
+header:
+  version: 11
+
+build_system: oe
+
+machine: xavier-rauc
+
+distro: xavier-raucdemo
+
+target: xavier-raucdemo-image
+
+local_conf_header:
+  meta-rauc-xavier: |
+    CONF_VERSION = "2"
+
+repos:
+  poky:
+    url: https://git.yoctoproject.org/git/poky.git
+    path: layers/poky
+    branch: mickledore
+    layers:
+      meta:
+      meta-poky:
+      meta-skeleton:
+      meta-yocto-bsp:
+
+  meta-openembedded:
+    url: https://git.openembedded.org/meta-openembedded
+    branch: mickledore
+    path: layers/meta-openembedded
+    layers:
+      meta-oe:
+      meta-python:
+      meta-filesystems:
+      meta-networking:
+      meta-webserver:
+
+  meta-tegra:
+    url: https://github.com/OE4T/meta-tegra.git
+    path: layers/meta-tegra
+    branch: mickledore
+
+  meta-tegra-community:
+    url: https://github.com/OE4T/meta-tegra-community.git
+    path: layers/meta-tegra-community
+    branch: mickledore
+
+  meta-rauc:
+    url: https://github.com/rauc/meta-rauc.git
+    path: layers/meta-rauc
+    branch: mickledore
+
+  meta-rauc-xavier:
+    path: layers/meta-rauc-xavier
